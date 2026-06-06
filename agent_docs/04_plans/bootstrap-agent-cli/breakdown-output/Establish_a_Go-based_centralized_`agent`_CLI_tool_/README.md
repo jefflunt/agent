@@ -1,0 +1,5 @@
+# Establish a Go-based centralized `agent` CLI tool that reads profile configurations from `~/.agent/config.yml`, parses adapter specifications, and routes piped prompt buffers from STDIN to the corresponding driver runner subprocess (such as `opencode` or `copilot`), ultimately outputting aggregated and sanitized clean text response to STDOUT.
+
+The 'agent' CLI project is a centralized Go-based tool designed to act as a unified router and facade for downstream LLM CLIs. By standardizing configuration under `~/.agent/config.yml` and parsing the configuration targets, it removes code duplication currently existing in other tools. The CLI accepts input from STDIN and pipes standard commands to the underlying runner (either `opencode` or `copilot`), parsing and streaming the clean output to STDOUT.
+
+This architecture establishes clear module boundaries: `pkg/config` for config loading, `pkg/adapter` for specification parsing, and `pkg/runner` for driver orchestration. When invoked via standard Unix pipes, the tool dynamically maps the adapter argument to the appropriate driver subprocess and streams sanitized text output directly to the console.

@@ -1,0 +1,82 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.a
+*.o
+*.obj
+/bin/
+.build/
+
+# Test binary, built with `go test -c`
+*.test
+__debug_bin
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+*.coverprofile
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Planner specific ephemeral files
+/plans/
+/workspace/
+/agent
+
+# File system metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Ephemeral auto-generated files, logs, and profiles
+tmp/
+temp/
+log/
+.cache/
+*.log
+*.prof
+*.pprof
+*.mprof
+*.cpu
+*.mem
+*.tmp
+*.temp
+*.bak
+
+# Test caches and throwaway test data
+coverage.txt
+coverage.html
+.pytest_cache/
+.nyc_output/
+
+# Editor/IDE temporary and configuration files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Databases and database dumps
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Local environment variables and secrets
+.env
+.env.local
+.env.*.local

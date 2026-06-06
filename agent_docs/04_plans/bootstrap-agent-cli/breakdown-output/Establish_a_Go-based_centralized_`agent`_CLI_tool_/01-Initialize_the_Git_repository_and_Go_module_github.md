@@ -1,0 +1,5 @@
+# Initialize the Git repository and Go module github.com/jefflunt/agent, setting up a standard package layout with cmd/agent/main.go and pkg directory placeholders to support config loading, parsing, and execution runner boundaries.
+
+This task establishes the base structure and development workspace for the Go-based centralized `agent` CLI tool. It initiates the repository using `git` and declares the Go module path as `github.com/jefflunt/agent`. Setting up this correct foundation ensures clean packaging and proper importing of internal packages across the repository.
+
+The second component of this task is organizing the directory structure according to Go's standard layout practices. Specifically, we will scaffold the entry point in `cmd/agent/main.go`, and establish the package placeholders under `pkg/config/`, `pkg/adapter/`, and `pkg/runner/`. This prepares the project for modular implementation of configuration parsing, command runners, and drivers, ensuring future tasks have pre-defined boundaries.
