@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -106,8 +107,21 @@ func (c *CLI) Run() int {
 			adapterName, adp.CLIName, adp.Provider, adp.Model)
 	}
 
-	// For now, since downstream runner implementation is in a placeholder stage, we call Placeholder() to satisfy imports.
-	_ = runner.Placeholder()
+	// Resolve the runner implementation
+	rnr, ok := runner.Get(adp.CLIName)
+	if !ok {
+		fmt.Fprintf(c.Stderr, "Error: no runner implementation found for driver %q\n", adp.CLIName)
+		return 1
+	}
+
+	// Execute the runner
+	resp, err := rnr.Run(context.Background(), adp.Model, prompt)
+	if err != nil {
+		fmt.Fprintf(c.Stderr, "Error: execution failed: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprint(c.Stdout, resp)
 
 	return 0
 }

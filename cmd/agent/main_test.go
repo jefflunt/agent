@@ -2,12 +2,24 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"strings"
 	"testing"
 
 	"github.com/jefflunt/agent/pkg/config"
+	"github.com/jefflunt/agent/pkg/runner"
 )
+
+type mockRunner struct{}
+
+func (m *mockRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+	return "mock response", nil
+}
+
+func init() {
+	runner.Register("copilot", &mockRunner{})
+}
 
 // errorReader is an io.Reader that always returns an error.
 type errorReader struct{}
