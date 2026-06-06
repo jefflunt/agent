@@ -9,6 +9,7 @@
 *.obj
 /bin/
 .build/
+build/
 
 # Test binary, built with `go test -c`
 *.test
@@ -20,6 +21,7 @@ __debug_bin
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+node_modules/
 
 # Go workspace file
 go.work
@@ -60,6 +62,10 @@ coverage.txt
 coverage.html
 .pytest_cache/
 .nyc_output/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
 # Editor/IDE temporary and configuration files
 .vscode/
@@ -80,3 +86,6 @@ coverage.html
 .env
 .env.local
 .env.*.local
+config.yml
+config.yaml
+.agent/
