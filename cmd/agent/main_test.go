@@ -17,8 +17,15 @@ func (m *mockRunner) Run(ctx context.Context, model string, prompt string) (stri
 	return "mock response", nil
 }
 
+type errorRunner struct{}
+
+func (e *errorRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+	return "", errors.New("mock runner execution failed")
+}
+
 func init() {
 	runner.Register("copilot", &mockRunner{})
+	runner.Register("error-runner", &errorRunner{})
 }
 
 // errorReader is an io.Reader that always returns an error.
@@ -331,5 +338,91 @@ func TestCLI_AdapterParseError(t *testing.T) {
 	stderrStr := stderr.String()
 	if !strings.Contains(stderrStr, "Error: failed to parse adapter specification for") {
 		t.Errorf("expected adapter parse error, got: %q", stderrStr)
+	}
+}
+
+func TestCLI_EmptyArgs(t *testing.T) {
+	stdin := strings.NewReader("prompt")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	cli := &CLI{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
+		Args:   []string{},
+		LoadConfig: func() (*config.Config, error) {
+			return &config.Config{}, nil
+		},
+	}
+
+	exitCode := cli.Run()
+	if exitCode != 1 {
+		t.Errorf("expected exit code 1, got %d", exitCode)
+	}
+
+	stderrStr := stderr.String()
+	if !strings.Contains(stderrStr, "Error: adapter name is required") {
+		t.Errorf("expected required adapter error, got: %q", stderrStr)
+	}
+}
+
+func TestCLI_RunnerNotFound(t *testing.T) {
+	stdin := strings.NewReader("prompt")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	cli := &CLI{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
+		Args:   []string{"agent", "test-adapter"},
+		LoadConfig: func() (*config.Config, error) {
+			return &config.Config{
+				Adapters: map[string]string{
+					"test-adapter": "unregistered-runner:openai/gpt-4o",
+				},
+			}, nil
+		},
+	}
+
+	exitCode := cli.Run()
+	if exitCode != 1 {
+		t.Errorf("expected exit code 1, got %d", exitCode)
+	}
+
+	stderrStr := stderr.String()
+	if !strings.Contains(stderrStr, `Error: no runner implementation found for driver "unregistered-runner"`) {
+		t.Errorf("expected runner not found error, got: %q", stderrStr)
+	}
+}
+
+func TestCLI_RunnerExecutionError(t *testing.T) {
+	stdin := strings.NewReader("prompt")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	cli := &CLI{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
+		Args:   []string{"agent", "test-adapter"},
+		LoadConfig: func() (*config.Config, error) {
+			return &config.Config{
+				Adapters: map[string]string{
+					"test-adapter": "error-runner:openai/gpt-4o",
+				},
+			}, nil
+		},
+	}
+
+	exitCode := cli.Run()
+	if exitCode != 1 {
+		t.Errorf("expected exit code 1, got %d", exitCode)
+	}
+
+	stderrStr := stderr.String()
+	if !strings.Contains(stderrStr, "Error: execution failed: mock runner execution failed") {
+		t.Errorf("expected execution failed error, got: %q", stderrStr)
 	}
 }
