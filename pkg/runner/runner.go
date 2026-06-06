@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -170,6 +171,212 @@ func Placeholder() string {
 	return "runner"
 }
 
+// CopilotRunner implements the Runner interface for the copilot driver.
+type CopilotRunner struct {
+	Executable     string
+	CommandFactory func(ctx context.Context, name string, args ...string) Command
+}
+
+// Run executes the external copilot subprocess with the correct arguments,
+// manages context-aware subprocess execution, and sanitizes the output stream.
+func (r *CopilotRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+	executable := r.Executable
+	if executable == "" {
+		executable = "copilot"
+	}
+
+	factory := r.CommandFactory
+	if factory == nil {
+		factory = NewRealCommand
+	}
+
+	// copilot -s -p "<prompt>" --excluded-tools=* --model <model>
+	args := []string{"-s", "-p", prompt, "--excluded-tools=*", "--model", model}
+	cmd := factory(ctx, executable, args...)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to get stdout pipe: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to get stderr pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start subprocess %s: %w", executable, err)
+	}
+
+	// We must read standard error to avoid blocking and capture errors.
+	var stderrBuf strings.Builder
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stderrBuf, stderr)
+	}()
+
+	var stdoutBuf strings.Builder
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stdoutBuf, stdout)
+	}()
+
+	wg.Wait()
+
+	waitErr := cmd.Wait()
+
+	if waitErr != nil {
+		stderrStr := strings.TrimSpace(stderrBuf.String())
+		if stderrStr != "" {
+			return "", fmt.Errorf("subprocess exited with error: %v, stderr: %s", waitErr, stderrStr)
+		}
+		return "", fmt.Errorf("subprocess exited with error: %v", waitErr)
+	}
+
+	cleaned := sanitizeCopilotOutput(stdoutBuf.String())
+	return cleaned, nil
+}
+
+func sanitizeCopilotOutput(raw string) string {
+	// 1. Process carriage returns to handle lines overwritten in terminal.
+	raw = processCarriageReturns(raw)
+
+	// 2. Remove ANSI escape sequences
+	ansiRegex := regexp.MustCompile(`\x1b\[[0-9;?]*[a-zA-Z]`)
+	cleaned := ansiRegex.ReplaceAllString(raw, "")
+
+	// 3. Filter out other unwanted control characters (ASCII < 32), keeping \n, \t, \r
+	var sb strings.Builder
+	for _, r := range cleaned {
+		if r == '\n' || r == '\t' || r == '\r' {
+			sb.WriteRune(r)
+			continue
+		}
+		if r < 32 || (r >= 127 && r < 160) {
+			continue // skip other control chars
+		}
+		sb.WriteRune(r)
+	}
+	cleaned = sb.String()
+
+	// 4. Filter out standard progress indicators/markers and lines containing spinner characters
+	lines := strings.Split(cleaned, "\n")
+	var filteredLines []string
+
+	spinnerChars := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	progressPrefixes := []string{
+		"progress:",
+		"thinking...",
+		"analyzing...",
+		"working...",
+		"fetching...",
+		"loading...",
+		"running tool...",
+	}
+
+	for _, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		lowerLine := strings.ToLower(trimmedLine)
+
+		isProgress := false
+		for _, prefix := range progressPrefixes {
+			if strings.HasPrefix(lowerLine, prefix) {
+				isProgress = true
+				break
+			}
+		}
+		if isProgress {
+			continue
+		}
+
+		hasSpinner := false
+		for _, char := range spinnerChars {
+			if strings.Contains(trimmedLine, char) {
+				hasSpinner = true
+				break
+			}
+		}
+		if hasSpinner {
+			continue
+		}
+
+		if matched, _ := regexp.MatchString(`^(?i)\[\d+/\d+\]|progress:\s*\d+%|running\s+\w+\.\.\.`, trimmedLine); matched {
+			continue
+		}
+
+		filteredLines = append(filteredLines, line)
+	}
+
+	cleaned = strings.Join(filteredLines, "\n")
+
+	// 5. Handle framing wrappers.
+	cleaned = strings.TrimSpace(cleaned)
+
+	// A: Check XML-style wrapper e.g. <response>...</response>, <result>...</result>
+	xmlWrappers := [][]string{
+		{"<response>", "</response>"},
+		{"<result>", "</result>"},
+		{"<output>", "</output>"},
+		{"<text>", "</text>"},
+	}
+	for _, w := range xmlWrappers {
+		if strings.HasPrefix(strings.ToLower(cleaned), w[0]) && strings.HasSuffix(strings.ToLower(cleaned), w[1]) {
+			cleaned = cleaned[len(w[0]) : len(cleaned)-len(w[1])]
+			cleaned = strings.TrimSpace(cleaned)
+			break
+		}
+	}
+
+	// B: Check markdown code block wrapper (e.g., ```markdown ... ``` or ```json ... ``` or just ``` ... ```)
+	if strings.HasPrefix(cleaned, "```") && strings.HasSuffix(cleaned, "```") {
+		idx := strings.Index(cleaned, "\n")
+		if idx != -1 {
+			cleaned = cleaned[idx+1 : len(cleaned)-3]
+			cleaned = strings.TrimSpace(cleaned)
+		} else {
+			cleaned = cleaned[3 : len(cleaned)-3]
+			cleaned = strings.TrimSpace(cleaned)
+		}
+	}
+
+	// C: Check "---" banner wrapper at the beginning and end
+	if strings.HasPrefix(cleaned, "---") && strings.HasSuffix(cleaned, "---") {
+		cleaned = cleaned[3 : len(cleaned)-3]
+		cleaned = strings.TrimSpace(cleaned)
+	}
+
+	return cleaned
+}
+
+func processCarriageReturns(s string) string {
+	var lines []string
+	currentLine := []rune{}
+	pos := 0
+
+	for _, r := range s {
+		if r == '\n' {
+			lines = append(lines, string(currentLine))
+			currentLine = []rune{}
+			pos = 0
+		} else if r == '\r' {
+			pos = 0
+		} else {
+			if pos < len(currentLine) {
+				currentLine[pos] = r
+			} else {
+				currentLine = append(currentLine, r)
+			}
+			pos++
+		}
+	}
+	lines = append(lines, string(currentLine))
+	return strings.Join(lines, "\n")
+}
+
 func init() {
 	Register("opencode", &OpencodeRunner{})
+	Register("copilot", &CopilotRunner{})
 }
