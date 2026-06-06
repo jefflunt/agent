@@ -10,6 +10,8 @@
 /bin/
 .build/
 build/
+_obj/
+_test/
 
 # Test binary, built with `go test -c`
 *.test
@@ -41,6 +43,8 @@ go.work.sum
 ehthumbs.db
 Thumbs.db
 Desktop.ini
+.LSOverride
+Icon\r
 
 # Ephemeral auto-generated files, logs, and profiles
 tmp/
@@ -66,6 +70,12 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.eslintcache
 
 # Editor/IDE temporary and configuration files
 .vscode/
@@ -81,6 +91,9 @@ __pycache__/
 *.db-journal
 *.db-shm
 *.db-wal
+*.dump
+*.dmp
+*.sql.gz
 
 # Local environment variables and secrets
 .env
