@@ -1,0 +1,7 @@
+# Update the CLI execution entrypoint in cmd/agent/main.go to integrate with the new AdapterConfig model by extracting both the adapter target and custom CLI flags from the configuration, parsing the target, and passing the user-defined custom flags into the runner's updated Run method.
+
+This task involves modifying the CLI execution flow in `cmd/agent/main.go` to support custom per-LLM flags. Currently, the main entrypoint loads the configuration via `c.LoadConfig()`, retrieves the adapter specification as a flat string from a map, parses it using `adapter.Parse(spec)`, and invokes the resolved runner's `Run` method with the model and the prompt. Under the new configuration design, `cfg.Adapters` is restructured to map to an `AdapterConfig` struct containing both the `Target` string and a slice of custom `Flags` (`[]string`).
+
+To implement this, we must update the retrieval and parsing logic in `cmd/agent/main.go`. Instead of treating `cfg.Adapters[adapterName]` as a simple string, we will access the fields of the updated `AdapterConfig` model. The target specification string will be extracted and passed to `adapter.Parse` to resolve the driver, provider, and model parameters. The optional custom flags will then be retrieved directly from the configuration.
+
+Finally, we will update the runner invocation to forward the custom flags slice to the runner's updated signature: `rnr.Run(context.Background(), modelParam, prompt, flags)`. This completes the flow of custom user-defined flags from the configuration down to subprocess execution.

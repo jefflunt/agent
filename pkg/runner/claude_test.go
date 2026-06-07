@@ -32,7 +32,7 @@ func TestClaudeRunner_Success(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	res, err := r.Run(ctx, "claude-sonnet-4-5", "test-prompt")
+	res, err := r.Run(ctx, "claude-sonnet-4-5", "test-prompt", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestClaudeRunner_DefaultExecutable(t *testing.T) {
 		},
 	}
 
-	_, _ = r.Run(context.Background(), "model", "prompt")
+	_, _ = r.Run(context.Background(), "model", "prompt", nil)
 	if capturedExecutable != "claude" {
 		t.Errorf("expected executable to default to %q, got %q", "claude", capturedExecutable)
 	}
@@ -91,7 +91,7 @@ func TestClaudeRunner_StripsProviderPrefix(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	_, err := r.Run(ctx, "anthropic/claude-sonnet-4-5", "prompt")
+	_, err := r.Run(ctx, "anthropic/claude-sonnet-4-5", "prompt", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestClaudeRunner_SubprocessExitErrorWithStderr(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -134,5 +134,37 @@ func TestClaudeRunner_SubprocessExitErrorWithStderr(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "claude command error message") {
 		t.Errorf("expected stderr message in the error, but was: %v", err)
+	}
+}
+
+func TestClaudeRunner_CustomFlags(t *testing.T) {
+	var capturedArgs []string
+	r := &ClaudeRunner{
+		CommandFactory: func(ctx context.Context, name string, args ...string) Command {
+			capturedArgs = args
+			return &MockCommand{
+				StdoutPipeFunc: func() (io.ReadCloser, error) {
+					return io.NopCloser(strings.NewReader("response")), nil
+				},
+			}
+		},
+	}
+
+	customFlags := []string{"--tools=web,bash", "--permissions=read-only"}
+	_, err := r.Run(context.Background(), "claude-sonnet-4-5", "prompt", customFlags)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify that behavioral flags ("--tools=\"\"") are bypassed, but structural flags are kept.
+	// Expected args: "-p", "prompt", "--model", "claude-sonnet-4-5", "--tools=web,bash", "--permissions=read-only"
+	expectedArgs := []string{"-p", "prompt", "--model", "claude-sonnet-4-5", "--tools=web,bash", "--permissions=read-only"}
+	if len(capturedArgs) != len(expectedArgs) {
+		t.Fatalf("expected args to have length %d, got %v", len(expectedArgs), capturedArgs)
+	}
+	for i, arg := range capturedArgs {
+		if arg != expectedArgs[i] {
+			t.Errorf("expected arg at index %d to be %q, got %q", i, expectedArgs[i], arg)
+		}
 	}
 }

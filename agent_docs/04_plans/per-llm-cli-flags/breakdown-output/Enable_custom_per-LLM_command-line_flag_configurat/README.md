@@ -1,0 +1,7 @@
+# Enable custom per-LLM command-line flag configurations by refactoring the configuration parsing layer to support nested YAML mappings, updating the Runner interface and runner execution engines to selectively override default behavioral flags with custom ones, and wiring the flags through the main CLI entrypoint.
+
+This task introduces configurable per-LLM and adapter CLI flags into the `agent` application. It allows users to customize behavioral flags passed to underlying LLM CLI tools (like `claude`, `copilot`, `opencode`, etc.) by overriding the hardcoded runner-level default behavioral flags when custom flags are provided in the configuration.
+
+First, the configuration parser in `pkg/config/config.go` must be updated to decode a new nested mapping schema (`AdapterConfig`) which supports both the backward-compatible string target syntax and a nested YAML mapping containing target and custom flags. This is achieved via a custom implementation of `UnmarshalYAML`.
+
+Second, the `Runner` interface and each of the runner implementations in `pkg/runner/runner.go` must be refactored to accept a slice of custom string flags. When these custom flags are provided, they replace/bypass the default behavioral parameters while keeping required structural parameters intact, adhering to the integration matrix. Finally, the CLI entrypoint in `cmd/agent/main.go` will be integrated to retrieve and forward these flags correctly.

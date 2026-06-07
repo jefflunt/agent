@@ -112,7 +112,7 @@ func TestOpencodeRunner_Success(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	res, err := r.Run(ctx, "my-model", "my-prompt")
+	res, err := r.Run(ctx, "my-model", "my-prompt", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestOpencodeRunner_DefaultExecutable(t *testing.T) {
 		},
 	}
 
-	_, _ = r.Run(context.Background(), "model", "prompt")
+	_, _ = r.Run(context.Background(), "model", "prompt", nil)
 	if capturedExecutable != "opencode" {
 		t.Errorf("expected executable to default to %q, got %q", "opencode", capturedExecutable)
 	}
@@ -168,7 +168,7 @@ func TestOpencodeRunner_StdoutPipeError(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -189,7 +189,7 @@ func TestOpencodeRunner_StderrPipeError(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -210,7 +210,7 @@ func TestOpencodeRunner_StartError(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -234,7 +234,7 @@ func TestOpencodeRunner_SubprocessExitErrorWithStderr(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -258,7 +258,7 @@ func TestOpencodeRunner_SubprocessExitErrorEmptyStderr(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -290,7 +290,7 @@ func TestOpencodeRunner_ScannerError(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -316,12 +316,44 @@ invalid-json-line-to-be-ignored
 		},
 	}
 
-	res, err := r.Run(context.Background(), "model", "prompt")
+	res, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	if res != "Hello World!" {
 		t.Errorf("expected aggregated response to ignore invalid/mismatched JSON lines and return %q, got %q", "Hello World!", res)
+	}
+}
+
+func TestOpencodeRunner_CustomFlags(t *testing.T) {
+	var capturedArgs []string
+	r := &OpencodeRunner{
+		CommandFactory: func(ctx context.Context, name string, args ...string) Command {
+			capturedArgs = args
+			return &MockCommand{
+				StdoutPipeFunc: func() (io.ReadCloser, error) {
+					return io.NopCloser(strings.NewReader(`{"type":"text","part":{"text":"output"}}`)), nil
+				},
+			}
+		},
+	}
+
+	customFlags := []string{"--some-custom-flag", "--another-one"}
+	_, err := r.Run(context.Background(), "my-model", "my-prompt", customFlags)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify that the default "--format json" was bypassed, but structural arguments like "run", prompt, and --model were preserved.
+	// Expected args: "run", "my-prompt", "--model", "my-model", "--some-custom-flag", "--another-one"
+	expectedArgs := []string{"run", "my-prompt", "--model", "my-model", "--some-custom-flag", "--another-one"}
+	if len(capturedArgs) != len(expectedArgs) {
+		t.Fatalf("expected args to have length %d, got %v", len(expectedArgs), capturedArgs)
+	}
+	for i, arg := range capturedArgs {
+		if arg != expectedArgs[i] {
+			t.Errorf("expected arg at index %d to be %q, got %q", i, expectedArgs[i], arg)
+		}
 	}
 }

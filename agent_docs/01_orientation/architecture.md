@@ -63,7 +63,7 @@ The CLI acts as the coordinator. It:
 - Validates delimiters and raises detailed errors for empty parts or missing components.
 
 ### 4. Runner Subprocess Engine (`pkg/runner/`)
-- Dictates a unified `Runner` interface: `Run(ctx context.Context, model string, prompt string) (string, error)`.
+- Dictates a unified `Runner` interface: `Run(ctx context.Context, model string, prompt string, flags []string) (string, error)`.
 - Implements individual subprocess runners that invoke underlying CLI tools:
   - **`agy`**: Direct execution of Google Antigravity CLI.
   - **`claude`**: Safe, sandboxed invocation of Claude Code CLI.

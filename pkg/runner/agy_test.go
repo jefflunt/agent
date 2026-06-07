@@ -32,7 +32,7 @@ func TestAgyRunner_Success(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	res, err := r.Run(ctx, "google/gemini-3.5-flash", "test-prompt")
+	res, err := r.Run(ctx, "google/gemini-3.5-flash", "test-prompt", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestAgyRunner_DefaultExecutable(t *testing.T) {
 		},
 	}
 
-	_, _ = r.Run(context.Background(), "model", "prompt")
+	_, _ = r.Run(context.Background(), "model", "prompt", nil)
 	if capturedExecutable != "agy" {
 		t.Errorf("expected executable to default to %q, got %q", "agy", capturedExecutable)
 	}
@@ -91,7 +91,7 @@ func TestAgyRunner_SubprocessExitErrorWithStderr(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -100,5 +100,37 @@ func TestAgyRunner_SubprocessExitErrorWithStderr(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "agy command error message") {
 		t.Errorf("expected stderr message in the error, but was: %v", err)
+	}
+}
+
+func TestAgyRunner_CustomFlags(t *testing.T) {
+	var capturedArgs []string
+	r := &AgyRunner{
+		CommandFactory: func(ctx context.Context, name string, args ...string) Command {
+			capturedArgs = args
+			return &MockCommand{
+				StdoutPipeFunc: func() (io.ReadCloser, error) {
+					return io.NopCloser(strings.NewReader("response")), nil
+				},
+			}
+		},
+	}
+
+	customFlags := []string{"--some-flag", "--another-flag"}
+	_, err := r.Run(context.Background(), "google/gemini-3.5-flash", "prompt", customFlags)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify that custom flags are appended.
+	// Expected args: "--print", "prompt", "--model", "google/gemini-3.5-flash", "--some-flag", "--another-flag"
+	expectedArgs := []string{"--print", "prompt", "--model", "google/gemini-3.5-flash", "--some-flag", "--another-flag"}
+	if len(capturedArgs) != len(expectedArgs) {
+		t.Fatalf("expected args to have length %d, got %v", len(expectedArgs), capturedArgs)
+	}
+	for i, arg := range capturedArgs {
+		if arg != expectedArgs[i] {
+			t.Errorf("expected arg at index %d to be %q, got %q", i, expectedArgs[i], arg)
+		}
 	}
 }

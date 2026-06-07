@@ -13,13 +13,13 @@ import (
 
 type mockRunner struct{}
 
-func (m *mockRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+func (m *mockRunner) Run(ctx context.Context, model string, prompt string, flags []string) (string, error) {
 	return "mock response", nil
 }
 
 type errorRunner struct{}
 
-func (e *errorRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+func (e *errorRunner) Run(ctx context.Context, model string, prompt string, flags []string) (string, error) {
 	return "", errors.New("mock runner execution failed")
 }
 
@@ -47,8 +47,8 @@ func TestCLI_Success(t *testing.T) {
 		Args:   []string{"agent", "test-adapter"},
 		LoadConfig: func() (*config.Config, error) {
 			return &config.Config{
-				Adapters: map[string]string{
-					"test-adapter": "copilot:openai/gpt-4o",
+				Adapters: map[string]config.AdapterConfig{
+					"test-adapter": {Target: "copilot:openai/gpt-4o"},
 				},
 			}, nil
 		},
@@ -72,8 +72,8 @@ func TestCLI_Success_Verbose(t *testing.T) {
 		Args:   []string{"agent", "--verbose", "test-adapter"},
 		LoadConfig: func() (*config.Config, error) {
 			return &config.Config{
-				Adapters: map[string]string{
-					"test-adapter": "copilot:openai/gpt-4o",
+				Adapters: map[string]config.AdapterConfig{
+					"test-adapter": {Target: "copilot:openai/gpt-4o"},
 				},
 			}, nil
 		},
@@ -105,8 +105,8 @@ func TestCLI_Success_ShortVerbose(t *testing.T) {
 		Args:   []string{"agent", "test-adapter", "-v"},
 		LoadConfig: func() (*config.Config, error) {
 			return &config.Config{
-				Adapters: map[string]string{
-					"test-adapter": "copilot:openai/gpt-4o",
+				Adapters: map[string]config.AdapterConfig{
+					"test-adapter": {Target: "copilot:openai/gpt-4o"},
 				},
 			}, nil
 		},
@@ -293,8 +293,8 @@ func TestCLI_AdapterNotFound(t *testing.T) {
 		Args:   []string{"agent", "nonexistent-adapter"},
 		LoadConfig: func() (*config.Config, error) {
 			return &config.Config{
-				Adapters: map[string]string{
-					"test-adapter": "copilot:openai/gpt-4o",
+				Adapters: map[string]config.AdapterConfig{
+					"test-adapter": {Target: "copilot:openai/gpt-4o"},
 				},
 			}, nil
 		},
@@ -323,8 +323,8 @@ func TestCLI_AdapterParseError(t *testing.T) {
 		Args:   []string{"agent", "bad-adapter"},
 		LoadConfig: func() (*config.Config, error) {
 			return &config.Config{
-				Adapters: map[string]string{
-					"bad-adapter": "invalid_format",
+				Adapters: map[string]config.AdapterConfig{
+					"bad-adapter": {Target: "invalid_format"},
 				},
 			}, nil
 		},
@@ -379,8 +379,8 @@ func TestCLI_RunnerNotFound(t *testing.T) {
 		Args:   []string{"agent", "test-adapter"},
 		LoadConfig: func() (*config.Config, error) {
 			return &config.Config{
-				Adapters: map[string]string{
-					"test-adapter": "unregistered-runner:openai/gpt-4o",
+				Adapters: map[string]config.AdapterConfig{
+					"test-adapter": {Target: "unregistered-runner:openai/gpt-4o"},
 				},
 			}, nil
 		},
@@ -409,8 +409,8 @@ func TestCLI_RunnerExecutionError(t *testing.T) {
 		Args:   []string{"agent", "test-adapter"},
 		LoadConfig: func() (*config.Config, error) {
 			return &config.Config{
-				Adapters: map[string]string{
-					"test-adapter": "error-runner:openai/gpt-4o",
+				Adapters: map[string]config.AdapterConfig{
+					"test-adapter": {Target: "error-runner:openai/gpt-4o"},
 				},
 			}, nil
 		},
@@ -429,10 +429,12 @@ func TestCLI_RunnerExecutionError(t *testing.T) {
 
 type captureRunner struct {
 	CapturedModel string
+	CapturedFlags []string
 }
 
-func (c *captureRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+func (c *captureRunner) Run(ctx context.Context, model string, prompt string, flags []string) (string, error) {
 	c.CapturedModel = model
+	c.CapturedFlags = flags
 	return "mock response", nil
 }
 
@@ -451,8 +453,8 @@ func TestCLI_QualifiedModelPassedToRunner(t *testing.T) {
 		Args:   []string{"agent", "test-adapter"},
 		LoadConfig: func() (*config.Config, error) {
 			return &config.Config{
-				Adapters: map[string]string{
-					"test-adapter": "capture-runner:google/gemini-3.5-flash",
+				Adapters: map[string]config.AdapterConfig{
+					"test-adapter": {Target: "capture-runner:google/gemini-3.5-flash"},
 				},
 			}, nil
 		},
@@ -466,5 +468,51 @@ func TestCLI_QualifiedModelPassedToRunner(t *testing.T) {
 	expectedModel := "google/gemini-3.5-flash"
 	if capRunner.CapturedModel != expectedModel {
 		t.Errorf("expected runner to receive qualified model %q, got %q", expectedModel, capRunner.CapturedModel)
+	}
+}
+
+func TestCLI_Success_WithCustomFlags(t *testing.T) {
+	capRunner := &captureRunner{}
+	runner.Register("capture-runner-flags", capRunner)
+
+	stdin := strings.NewReader("user prompt here")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	cli := &CLI{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
+		Args:   []string{"agent", "test-adapter-with-flags"},
+		LoadConfig: func() (*config.Config, error) {
+			return &config.Config{
+				Adapters: map[string]config.AdapterConfig{
+					"test-adapter-with-flags": {
+						Target: "capture-runner-flags:google/gemini-3.5-flash",
+						Flags:  []string{"--tools=web,bash", "--permissions=read-only"},
+					},
+				},
+			}, nil
+		},
+	}
+
+	exitCode := cli.Run()
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d. Stderr: %q", exitCode, stderr.String())
+	}
+
+	expectedModel := "google/gemini-3.5-flash"
+	if capRunner.CapturedModel != expectedModel {
+		t.Errorf("expected runner to receive qualified model %q, got %q", expectedModel, capRunner.CapturedModel)
+	}
+
+	if len(capRunner.CapturedFlags) != 2 {
+		t.Fatalf("expected 2 flags, got %d: %v", len(capRunner.CapturedFlags), capRunner.CapturedFlags)
+	}
+	if capRunner.CapturedFlags[0] != "--tools=web,bash" {
+		t.Errorf("expected first flag to be %q, got %q", "--tools=web,bash", capRunner.CapturedFlags[0])
+	}
+	if capRunner.CapturedFlags[1] != "--permissions=read-only" {
+		t.Errorf("expected second flag to be %q, got %q", "--permissions=read-only", capRunner.CapturedFlags[1])
 	}
 }

@@ -96,7 +96,7 @@ func (c *CLI) Run() int {
 	}
 
 	// Parse the adapter target string
-	adp, err := adapter.Parse(spec)
+	adp, err := adapter.Parse(spec.Target)
 	if err != nil {
 		fmt.Fprintf(c.Stderr, "Error: failed to parse adapter specification for %q: %v\n", adapterName, err)
 		return 1
@@ -120,7 +120,7 @@ func (c *CLI) Run() int {
 		modelParam = adp.Provider + "/" + adp.Model
 	}
 
-	resp, err := rnr.Run(context.Background(), modelParam, prompt)
+	resp, err := rnr.Run(context.Background(), modelParam, prompt, spec.Flags)
 	if err != nil {
 		fmt.Fprintf(c.Stderr, "Error: execution failed: %v\n", err)
 		return 1

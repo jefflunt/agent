@@ -32,7 +32,7 @@ func TestCopilotRunner_Success(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	res, err := r.Run(ctx, "copilot-gpt-4", "test-prompt")
+	res, err := r.Run(ctx, "copilot-gpt-4", "test-prompt", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestCopilotRunner_DefaultExecutable(t *testing.T) {
 		},
 	}
 
-	_, _ = r.Run(context.Background(), "model", "prompt")
+	_, _ = r.Run(context.Background(), "model", "prompt", nil)
 	if capturedExecutable != "copilot" {
 		t.Errorf("expected executable to default to %q, got %q", "copilot", capturedExecutable)
 	}
@@ -88,7 +88,7 @@ func TestCopilotRunner_StdoutPipeError(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -109,7 +109,7 @@ func TestCopilotRunner_StderrPipeError(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -130,7 +130,7 @@ func TestCopilotRunner_StartError(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -154,7 +154,7 @@ func TestCopilotRunner_SubprocessExitErrorWithStderr(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -178,7 +178,7 @@ func TestCopilotRunner_SubprocessExitErrorEmptyStderr(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -315,7 +315,7 @@ func TestCopilotRunner_StripsProviderPrefix(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	_, err := r.Run(ctx, "anthropic/claude-haiku-4.5", "test-prompt")
+	_, err := r.Run(ctx, "anthropic/claude-haiku-4.5", "test-prompt", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -333,5 +333,37 @@ func TestCopilotRunner_StripsProviderPrefix(t *testing.T) {
 	}
 	if !foundModel {
 		t.Errorf("expected to find --model argument with value %q, but captured args were: %v", expectedModelArg, capturedArgs)
+	}
+}
+
+func TestCopilotRunner_CustomFlags(t *testing.T) {
+	var capturedArgs []string
+	r := &CopilotRunner{
+		CommandFactory: func(ctx context.Context, name string, args ...string) Command {
+			capturedArgs = args
+			return &MockCommand{
+				StdoutPipeFunc: func() (io.ReadCloser, error) {
+					return io.NopCloser(strings.NewReader("response")), nil
+				},
+			}
+		},
+	}
+
+	customFlags := []string{"--some-flag", "--another-flag"}
+	_, err := r.Run(context.Background(), "gpt-4", "prompt", customFlags)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify that behavioral flags ("-s", "--excluded-tools=*") are bypassed, but structural flags are kept.
+	// Expected args: "-p", "prompt", "--model", "gpt-4", "--some-flag", "--another-flag"
+	expectedArgs := []string{"-p", "prompt", "--model", "gpt-4", "--some-flag", "--another-flag"}
+	if len(capturedArgs) != len(expectedArgs) {
+		t.Fatalf("expected args to have length %d, got %v", len(expectedArgs), capturedArgs)
+	}
+	for i, arg := range capturedArgs {
+		if arg != expectedArgs[i] {
+			t.Errorf("expected arg at index %d to be %q, got %q", i, expectedArgs[i], arg)
+		}
 	}
 }

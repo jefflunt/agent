@@ -15,7 +15,7 @@ import (
 
 // Runner dictates the contract for all backend driver runners.
 type Runner interface {
-	Run(ctx context.Context, model string, prompt string) (string, error)
+	Run(ctx context.Context, model string, prompt string, flags []string) (string, error)
 }
 
 // Registry or routing mechanism.
@@ -92,7 +92,7 @@ type OpencodeEvent struct {
 }
 
 // Run executes the under-the-hood opencode CLI subprocess and parses its output stream.
-func (r *OpencodeRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+func (r *OpencodeRunner) Run(ctx context.Context, model string, prompt string, flags []string) (string, error) {
 	executable := r.Executable
 	if executable == "" {
 		executable = "opencode"
@@ -103,7 +103,12 @@ func (r *OpencodeRunner) Run(ctx context.Context, model string, prompt string) (
 		factory = NewRealCommand
 	}
 
-	args := []string{"run", prompt, "--model", model, "--format", "json"}
+	var args []string
+	if len(flags) > 0 {
+		args = append([]string{"run", prompt, "--model", model}, flags...)
+	} else {
+		args = []string{"run", prompt, "--model", model, "--format", "json"}
+	}
 	cmd := factory(ctx, executable, args...)
 
 	stdout, err := cmd.StdoutPipe()
@@ -180,7 +185,7 @@ type CopilotRunner struct {
 
 // Run executes the external copilot subprocess with the correct arguments,
 // manages context-aware subprocess execution, and sanitizes the output stream.
-func (r *CopilotRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+func (r *CopilotRunner) Run(ctx context.Context, model string, prompt string, flags []string) (string, error) {
 	executable := r.Executable
 	if executable == "" {
 		executable = "copilot"
@@ -197,8 +202,13 @@ func (r *CopilotRunner) Run(ctx context.Context, model string, prompt string) (s
 		model = parts[1]
 	}
 
-	// copilot -s -p "<prompt>" --excluded-tools=* --model <model>
-	args := []string{"-s", "-p", prompt, "--excluded-tools=*", "--model", model}
+	var args []string
+	if len(flags) > 0 {
+		args = append([]string{"-p", prompt, "--model", model}, flags...)
+	} else {
+		// copilot -s -p "<prompt>" --excluded-tools=* --model <model>
+		args = []string{"-s", "-p", prompt, "--excluded-tools=*", "--model", model}
+	}
 	cmd := factory(ctx, executable, args...)
 
 	stdout, err := cmd.StdoutPipe()
@@ -398,7 +408,7 @@ type ClaudeRunner struct {
 }
 
 // Run executes the under-the-hood claude CLI subprocess and captures its output.
-func (r *ClaudeRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+func (r *ClaudeRunner) Run(ctx context.Context, model string, prompt string, flags []string) (string, error) {
 	executable := r.Executable
 	if executable == "" {
 		executable = "claude"
@@ -415,8 +425,13 @@ func (r *ClaudeRunner) Run(ctx context.Context, model string, prompt string) (st
 		model = parts[1]
 	}
 
-	// claude -p "<prompt>" --tools="" --model <model>
-	args := []string{"-p", prompt, "--tools=\"\"", "--model", model}
+	var args []string
+	if len(flags) > 0 {
+		args = append([]string{"-p", prompt, "--model", model}, flags...)
+	} else {
+		// claude -p "<prompt>" --tools="" --model <model>
+		args = []string{"-p", prompt, "--tools=\"\"", "--model", model}
+	}
 	cmd := factory(ctx, executable, args...)
 
 	stdout, err := cmd.StdoutPipe()
@@ -471,7 +486,7 @@ type GeminiRunner struct {
 }
 
 // Run executes the under-the-hood gemini CLI subprocess and captures its output.
-func (r *GeminiRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+func (r *GeminiRunner) Run(ctx context.Context, model string, prompt string, flags []string) (string, error) {
 	executable := r.Executable
 	if executable == "" {
 		executable = "gemini"
@@ -496,8 +511,13 @@ func (r *GeminiRunner) Run(ctx context.Context, model string, prompt string) (st
 		}
 	}
 
-	// gemini -p "<prompt>" --approval-mode=plan -m <model>
-	args := []string{"-p", prompt, "--approval-mode=plan", "-m", model}
+	var args []string
+	if len(flags) > 0 {
+		args = append([]string{"-p", prompt, "-m", model}, flags...)
+	} else {
+		// gemini -p "<prompt>" --approval-mode=plan -m <model>
+		args = []string{"-p", prompt, "--approval-mode=plan", "-m", model}
+	}
 	cmd := factory(ctx, executable, args...)
 
 	stdout, err := cmd.StdoutPipe()
@@ -552,7 +572,7 @@ type AgyRunner struct {
 }
 
 // Run executes the under-the-hood agy CLI subprocess and captures its output.
-func (r *AgyRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+func (r *AgyRunner) Run(ctx context.Context, model string, prompt string, flags []string) (string, error) {
 	executable := r.Executable
 	if executable == "" {
 		executable = "agy"
@@ -565,6 +585,9 @@ func (r *AgyRunner) Run(ctx context.Context, model string, prompt string) (strin
 
 	// agy --print "<prompt>" --model <model>
 	args := []string{"--print", prompt, "--model", model}
+	if len(flags) > 0 {
+		args = append(args, flags...)
+	}
 	cmd := factory(ctx, executable, args...)
 
 	stdout, err := cmd.StdoutPipe()

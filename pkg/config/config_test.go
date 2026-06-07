@@ -135,11 +135,11 @@ fast: "adapter-spec-2"
 	if len(cfg.Adapters) != 2 {
 		t.Errorf("expected 2 adapters, got %d", len(cfg.Adapters))
 	}
-	if cfg.Adapters["primary"] != "adapter-spec-1" {
-		t.Errorf("expected adapters[primary] to be %q, got %q", "adapter-spec-1", cfg.Adapters["primary"])
+	if cfg.Adapters["primary"].Target != "adapter-spec-1" {
+		t.Errorf("expected adapters[primary].Target to be %q, got %q", "adapter-spec-1", cfg.Adapters["primary"].Target)
 	}
-	if cfg.Adapters["fast"] != "adapter-spec-2" {
-		t.Errorf("expected adapters[fast] to be %q, got %q", "adapter-spec-2", cfg.Adapters["fast"])
+	if cfg.Adapters["fast"].Target != "adapter-spec-2" {
+		t.Errorf("expected adapters[fast].Target to be %q, got %q", "adapter-spec-2", cfg.Adapters["fast"].Target)
 	}
 }
 
@@ -176,11 +176,68 @@ adapters:
 	if len(cfg.Adapters) != 2 {
 		t.Errorf("expected 2 adapters, got %d", len(cfg.Adapters))
 	}
-	if cfg.Adapters["primary"] != "adapter-spec-1" {
-		t.Errorf("expected adapters[primary] to be %q, got %q", "adapter-spec-1", cfg.Adapters["primary"])
+	if cfg.Adapters["primary"].Target != "adapter-spec-1" {
+		t.Errorf("expected adapters[primary].Target to be %q, got %q", "adapter-spec-1", cfg.Adapters["primary"].Target)
 	}
-	if cfg.Adapters["claude"] != "adapter-spec-3" {
-		t.Errorf("expected adapters[claude] to be %q, got %q", "adapter-spec-3", cfg.Adapters["claude"])
+	if cfg.Adapters["claude"].Target != "adapter-spec-3" {
+		t.Errorf("expected adapters[claude].Target to be %q, got %q", "adapter-spec-3", cfg.Adapters["claude"].Target)
+	}
+}
+
+func TestLoadWithOS_SuccessNestedWithFlags(t *testing.T) {
+	yamlData := `
+adapters:
+  primary: "adapter-spec-1"
+  claude:
+    target: "adapter-spec-3"
+    flags:
+      - "--tools=web,bash"
+      - "--permissions=read-only"
+`
+	mock := MockOS{
+		LookupEnvFunc: func(key string) (string, bool) {
+			if key == "AGENT_CONFIG_PATH" {
+				return "/home/user/.agent/config.yml", true
+			}
+			return "", false
+		},
+		ReadFileFunc: func(name string) ([]byte, error) {
+			if name == "/home/user/.agent/config.yml" {
+				return []byte(yamlData), nil
+			}
+			return nil, os.ErrNotExist
+		},
+	}
+
+	cfg, err := LoadWithOS(mock)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg == nil {
+		t.Fatal("expected non-nil config")
+	}
+
+	if len(cfg.Adapters) != 2 {
+		t.Errorf("expected 2 adapters, got %d", len(cfg.Adapters))
+	}
+	if cfg.Adapters["primary"].Target != "adapter-spec-1" {
+		t.Errorf("expected adapters[primary].Target to be %q, got %q", "adapter-spec-1", cfg.Adapters["primary"].Target)
+	}
+	if len(cfg.Adapters["primary"].Flags) != 0 {
+		t.Errorf("expected adapters[primary].Flags to be empty, got %v", cfg.Adapters["primary"].Flags)
+	}
+	if cfg.Adapters["claude"].Target != "adapter-spec-3" {
+		t.Errorf("expected adapters[claude].Target to be %q, got %q", "adapter-spec-3", cfg.Adapters["claude"].Target)
+	}
+	if len(cfg.Adapters["claude"].Flags) != 2 {
+		t.Fatalf("expected adapters[claude].Flags to have length 2, got %v", cfg.Adapters["claude"].Flags)
+	}
+	if cfg.Adapters["claude"].Flags[0] != "--tools=web,bash" {
+		t.Errorf("expected first flag to be %q, got %q", "--tools=web,bash", cfg.Adapters["claude"].Flags[0])
+	}
+	if cfg.Adapters["claude"].Flags[1] != "--permissions=read-only" {
+		t.Errorf("expected second flag to be %q, got %q", "--permissions=read-only", cfg.Adapters["claude"].Flags[1])
 	}
 }
 

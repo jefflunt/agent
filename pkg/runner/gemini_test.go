@@ -33,7 +33,7 @@ func TestGeminiRunner_Success(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	res, err := r.Run(ctx, "gemini-3.5-flash", "test-prompt")
+	res, err := r.Run(ctx, "gemini-3.5-flash", "test-prompt", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestGeminiRunner_DefaultExecutable(t *testing.T) {
 		},
 	}
 
-	_, _ = r.Run(context.Background(), "model", "prompt")
+	_, _ = r.Run(context.Background(), "model", "prompt", nil)
 	if capturedExecutable != "gemini" {
 		t.Errorf("expected executable to default to %q, got %q", "gemini", capturedExecutable)
 	}
@@ -92,7 +92,7 @@ func TestGeminiRunner_StripsProviderPrefix(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	_, err := r.Run(ctx, "google/gemini-3.5-flash", "prompt")
+	_, err := r.Run(ctx, "google/gemini-3.5-flash", "prompt", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestGeminiRunner_EnvVarFallback(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestGeminiRunner_SubprocessExitErrorWithStderr(t *testing.T) {
 		},
 	}
 
-	_, err := r.Run(context.Background(), "model", "prompt")
+	_, err := r.Run(context.Background(), "model", "prompt", nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -180,5 +180,37 @@ func TestGeminiRunner_SubprocessExitErrorWithStderr(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "gemini command error message") {
 		t.Errorf("expected stderr message in the error, but was: %v", err)
+	}
+}
+
+func TestGeminiRunner_CustomFlags(t *testing.T) {
+	var capturedArgs []string
+	r := &GeminiRunner{
+		CommandFactory: func(ctx context.Context, name string, args ...string) Command {
+			capturedArgs = args
+			return &MockCommand{
+				StdoutPipeFunc: func() (io.ReadCloser, error) {
+					return io.NopCloser(strings.NewReader("response")), nil
+				},
+			}
+		},
+	}
+
+	customFlags := []string{"--approval-mode=manual", "--some-flag"}
+	_, err := r.Run(context.Background(), "gemini-3.5-flash", "prompt", customFlags)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify that behavioral flags ("--approval-mode=plan") are bypassed, but structural flags are kept.
+	// Expected args: "-p", "prompt", "-m", "gemini-3.5-flash", "--approval-mode=manual", "--some-flag"
+	expectedArgs := []string{"-p", "prompt", "-m", "gemini-3.5-flash", "--approval-mode=manual", "--some-flag"}
+	if len(capturedArgs) != len(expectedArgs) {
+		t.Fatalf("expected args to have length %d, got %v", len(expectedArgs), capturedArgs)
+	}
+	for i, arg := range capturedArgs {
+		if arg != expectedArgs[i] {
+			t.Errorf("expected arg at index %d to be %q, got %q", i, expectedArgs[i], arg)
+		}
 	}
 }

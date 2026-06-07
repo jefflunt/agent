@@ -10,9 +10,34 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// AdapterConfig represents a structured adapter config with optional CLI flags.
+type AdapterConfig struct {
+	Target string   `yaml:"target"`
+	Flags  []string `yaml:"flags"`
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler to handle both string and map configurations.
+func (a *AdapterConfig) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		var s string
+		if err := value.Decode(&s); err != nil {
+			return err
+		}
+		a.Target = s
+		return nil
+	}
+	type alias AdapterConfig
+	var aux alias
+	if err := value.Decode(&aux); err != nil {
+		return err
+	}
+	*a = AdapterConfig(aux)
+	return nil
+}
+
 // Config represents the application configuration.
 type Config struct {
-	Adapters map[string]string
+	Adapters map[string]AdapterConfig
 }
 
 // ErrConfigMissing is returned when the configuration file cannot be found.
@@ -97,14 +122,14 @@ func ResolvePath(sys OS) (string, error) {
 // It supports both a flat map structure and a nested structure under an "adapters" key.
 func ParseConfig(data []byte) (*Config, error) {
 	var nested struct {
-		Adapters map[string]string `yaml:"adapters"`
+		Adapters map[string]AdapterConfig `yaml:"adapters"`
 	}
 	nestedErr := yaml.Unmarshal(data, &nested)
 	if nestedErr == nil && len(nested.Adapters) > 0 {
 		return &Config{Adapters: nested.Adapters}, nil
 	}
 
-	var flat map[string]string
+	var flat map[string]AdapterConfig
 	flatErr := yaml.Unmarshal(data, &flat)
 	if flatErr == nil && len(flat) > 0 {
 		return &Config{Adapters: flat}, nil
@@ -114,7 +139,7 @@ func ParseConfig(data []byte) (*Config, error) {
 		return nil, fmt.Errorf("malformed YAML: %v", nestedErr)
 	}
 
-	return &Config{Adapters: make(map[string]string)}, nil
+	return &Config{Adapters: make(map[string]AdapterConfig)}, nil
 }
 
 // Placeholder is a temporary function to ensure the package is correctly compiled and imported.

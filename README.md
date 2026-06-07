@@ -43,27 +43,48 @@ The `agent` CLI locates its configuration file by checking:
 2. Falling back to the default file location at **`~/.agent/config.yml`**.
 
 ### **Mapping Format**
-Adapters are defined inside the config using the following standard specification format:
-```yaml
-<adapter-name>: "<driver-cli>:<provider>/<model>"
-```
+Adapters can be defined inside the config using either a simple string value (for backward compatibility) or a structured format containing custom CLI `flags` (Option C: complete override control of optional behavioral flags):
+
+1. **Simple Format**:
+   ```yaml
+   <adapter-name>: "<driver-cli>:<provider>/<model>"
+   ```
+
+2. **Structured Format (with Custom Flags)**:
+   ```yaml
+   <adapter-name>:
+     target: "<driver-cli>:<provider>/<model>"
+     flags:
+       - "--some-flag"
+       - "--another-flag=value"
+   ```
 
 ### **Example Configuration (`~/.agent/config.yml`)**
-Create or update your `~/.agent/config.yml` with your favorite drivers:
+Create or update your `~/.agent/config.yml` with your favorite drivers and custom flags:
 
 ```yaml
 adapters:
-  # Using the Opencode Driver
+  # Using the Opencode Driver (Simple Format)
   test_opencode: "opencode:google/gemini-3.5-flash"
 
-  # Using the Copilot Driver
-  test_copilot: "copilot:anthropic/claude-haiku-4.5"
+  # Using the Copilot Driver with explicit behavior overrides
+  test_copilot:
+    target: "copilot:anthropic/claude-haiku-4.5"
+    flags:
+      - "-s"
+      - "--excluded-tools=*"
 
-  # Using the Claude Code Driver
-  test_claude: "claude:anthropic/claude-sonnet-4-6"
+  # Using the Claude Code Driver with custom tools config
+  test_claude:
+    target: "claude:anthropic/claude-sonnet-4-6"
+    flags:
+      - "--tools=\"\""
 
-  # Using the Gemini CLI Driver (Automatically injects GEMINI_API_KEY from GEMINI_KEY if missing)
-  test_gemini: "gemini:google/gemini-3.5-flash"
+  # Using the Gemini CLI Driver with specific approval mode (Auto-injects GEMINI_API_KEY from GEMINI_KEY if missing)
+  test_gemini:
+    target: "gemini:google/gemini-3.5-flash"
+    flags:
+      - "--approval-mode=plan"
 
   # Using the Google Antigravity CLI Driver
   test_antigravity: "agy:google/gemini-3.5-flash"

@@ -72,21 +72,45 @@ The location is resolved inside `ResolvePath()` checking:
 - If the file is absent, a custom `ErrConfigMissing` error is returned. This struct provides a helpful prompt guiding the user on how to populate their configurations.
 
 ### 3. Parsing and Unmarshaling (Flexible Formats)
-Our YAML parser in `ParseConfig()` is designed to be highly tolerant by supporting two distinct YAML layouts:
+Our YAML parser in `ParseConfig()` is designed to be highly tolerant by supporting both flat layouts and nested layouts under an `adapters` root. Furthermore, individual adapters can be specified either as a simple string target or as a structured mapping containing custom CLI `flags`.
+
+#### The `AdapterConfig` Struct and Custom Unmarshaler
+To support both string scalars and nested structures transparently, we deserialize values into an `AdapterConfig` model:
+```go
+type AdapterConfig struct {
+	Target string   `yaml:"target"`
+	Flags  []string `yaml:"flags"`
+}
+```
+A custom `UnmarshalYAML` method automatically converts simple string mappings (e.g. `test_copilot: "copilot:..."`) into an `AdapterConfig` with `Target: "copilot:..."` and empty flags.
 
 #### Layout A: Nested Map (Recommended)
 This layout wraps adapter mappings under an explicit `adapters` root:
 ```yaml
 adapters:
+  # Simple scalar format
   test_copilot: "copilot:anthropic/claude-haiku-4.5"
-  test_gemini: "gemini:google/gemini-3.5-flash"
+  
+  # Structured format with custom flags
+  test_claude:
+    target: "claude:anthropic/claude-sonnet-4-6"
+    flags:
+      - "--tools=web,bash"
+      - "--permissions=read-only"
 ```
 
 #### Layout B: Flat Map
 This layout defines the mappings directly at the document root level:
 ```yaml
+# Simple scalar format
 test_copilot: "copilot:anthropic/claude-haiku-4.5"
-test_gemini: "gemini:google/gemini-3.5-flash"
+
+# Structured format with custom flags
+test_claude:
+  target: "claude:anthropic/claude-sonnet-4-6"
+  flags:
+    - "--tools=web,bash"
+    - "--permissions=read-only"
 ```
 
 The parser first attempts to unmarshal the input bytes into the Nested structure. If no adapters are resolved, it automatically falls back to unmarshaling into a Flat map. If both unmarshal processes fail, a detailed malformed YAML error is thrown.
