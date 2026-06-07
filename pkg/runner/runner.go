@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -386,6 +387,7 @@ func init() {
 	Register("opencode", &OpencodeRunner{})
 	Register("copilot", &CopilotRunner{})
 	Register("claude", &ClaudeRunner{})
+	Register("gemini", &GeminiRunner{})
 }
 
 // ClaudeRunner implements the Runner interface for the claude (Claude Code) driver.
@@ -414,6 +416,87 @@ func (r *ClaudeRunner) Run(ctx context.Context, model string, prompt string) (st
 
 	// claude -p "<prompt>" --tools="" --model <model>
 	args := []string{"-p", prompt, "--tools=\"\"", "--model", model}
+	cmd := factory(ctx, executable, args...)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to get stdout pipe: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to get stderr pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start subprocess %s: %w", executable, err)
+	}
+
+	// We must read standard error to avoid blocking and capture errors.
+	var stderrBuf strings.Builder
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stderrBuf, stderr)
+	}()
+
+	var stdoutBuf strings.Builder
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stdoutBuf, stdout)
+	}()
+
+	wg.Wait()
+
+	waitErr := cmd.Wait()
+
+	if waitErr != nil {
+		stderrStr := strings.TrimSpace(stderrBuf.String())
+		if stderrStr != "" {
+			return "", fmt.Errorf("subprocess exited with error: %v, stderr: %s", waitErr, stderrStr)
+		}
+		return "", fmt.Errorf("subprocess exited with error: %v", waitErr)
+	}
+
+	return stdoutBuf.String(), nil
+}
+
+// GeminiRunner implements the Runner interface for the gemini driver.
+type GeminiRunner struct {
+	Executable     string
+	CommandFactory func(ctx context.Context, name string, args ...string) Command
+}
+
+// Run executes the under-the-hood gemini CLI subprocess and captures its output.
+func (r *GeminiRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+	executable := r.Executable
+	if executable == "" {
+		executable = "gemini"
+	}
+
+	factory := r.CommandFactory
+	if factory == nil {
+		factory = NewRealCommand
+	}
+
+	// Gemini expects only the bare model name. If a fully-qualified model
+	// (e.g., "provider/model") is passed, we strip the provider prefix.
+	if parts := strings.Split(model, "/"); len(parts) == 2 {
+		model = parts[1]
+	}
+
+	// Propagate GEMINI_API_KEY if GEMINI_KEY is present and GEMINI_API_KEY is empty
+	if os.Getenv("GEMINI_API_KEY") == "" {
+		if val := os.Getenv("GEMINI_KEY"); val != "" {
+			os.Setenv("GEMINI_API_KEY", val)
+			defer os.Unsetenv("GEMINI_API_KEY")
+		}
+	}
+
+	// gemini -p "<prompt>" --approval-mode=plan -m <model>
+	args := []string{"-p", prompt, "--approval-mode=plan", "-m", model}
 	cmd := factory(ctx, executable, args...)
 
 	stdout, err := cmd.StdoutPipe()
