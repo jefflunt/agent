@@ -299,3 +299,39 @@ actual response text is here
 		})
 	}
 }
+
+func TestCopilotRunner_StripsProviderPrefix(t *testing.T) {
+	var capturedArgs []string
+
+	r := &CopilotRunner{
+		CommandFactory: func(ctx context.Context, name string, args ...string) Command {
+			capturedArgs = args
+			return &MockCommand{
+				StdoutPipeFunc: func() (io.ReadCloser, error) {
+					return io.NopCloser(strings.NewReader("some response")), nil
+				},
+			}
+		},
+	}
+
+	ctx := context.Background()
+	_, err := r.Run(ctx, "anthropic/claude-haiku-4.5", "test-prompt")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expectedModelArg := "claude-haiku-4.5"
+	foundModel := false
+	for i, arg := range capturedArgs {
+		if arg == "--model" && i+1 < len(capturedArgs) {
+			if capturedArgs[i+1] == expectedModelArg {
+				foundModel = true
+			} else {
+				t.Errorf("expected model argument to be %q, got %q", expectedModelArg, capturedArgs[i+1])
+			}
+		}
+	}
+	if !foundModel {
+		t.Errorf("expected to find --model argument with value %q, but captured args were: %v", expectedModelArg, capturedArgs)
+	}
+}

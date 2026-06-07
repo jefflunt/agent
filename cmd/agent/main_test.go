@@ -426,3 +426,45 @@ func TestCLI_RunnerExecutionError(t *testing.T) {
 		t.Errorf("expected execution failed error, got: %q", stderrStr)
 	}
 }
+
+type captureRunner struct {
+	CapturedModel string
+}
+
+func (c *captureRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+	c.CapturedModel = model
+	return "mock response", nil
+}
+
+func TestCLI_QualifiedModelPassedToRunner(t *testing.T) {
+	capRunner := &captureRunner{}
+	runner.Register("capture-runner", capRunner)
+
+	stdin := strings.NewReader("user prompt here")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	cli := &CLI{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
+		Args:   []string{"agent", "test-adapter"},
+		LoadConfig: func() (*config.Config, error) {
+			return &config.Config{
+				Adapters: map[string]string{
+					"test-adapter": "capture-runner:google/gemini-3.5-flash",
+				},
+			}, nil
+		},
+	}
+
+	exitCode := cli.Run()
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d. Stderr: %q", exitCode, stderr.String())
+	}
+
+	expectedModel := "google/gemini-3.5-flash"
+	if capRunner.CapturedModel != expectedModel {
+		t.Errorf("expected runner to receive qualified model %q, got %q", expectedModel, capRunner.CapturedModel)
+	}
+}

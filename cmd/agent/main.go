@@ -115,7 +115,12 @@ func (c *CLI) Run() int {
 	}
 
 	// Execute the runner
-	resp, err := rnr.Run(context.Background(), adp.Model, prompt)
+	modelParam := adp.Model
+	if adp.Provider != "" {
+		modelParam = adp.Provider + "/" + adp.Model
+	}
+
+	resp, err := rnr.Run(context.Background(), modelParam, prompt)
 	if err != nil {
 		fmt.Fprintf(c.Stderr, "Error: execution failed: %v\n", err)
 		return 1

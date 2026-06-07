@@ -190,6 +190,12 @@ func (r *CopilotRunner) Run(ctx context.Context, model string, prompt string) (s
 		factory = NewRealCommand
 	}
 
+	// Copilot expects only the bare model name. If a fully-qualified model
+	// (e.g., "provider/model") is passed, we strip the provider prefix.
+	if parts := strings.Split(model, "/"); len(parts) == 2 {
+		model = parts[1]
+	}
+
 	// copilot -s -p "<prompt>" --excluded-tools=* --model <model>
 	args := []string{"-s", "-p", prompt, "--excluded-tools=*", "--model", model}
 	cmd := factory(ctx, executable, args...)
