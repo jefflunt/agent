@@ -388,6 +388,7 @@ func init() {
 	Register("copilot", &CopilotRunner{})
 	Register("claude", &ClaudeRunner{})
 	Register("gemini", &GeminiRunner{})
+	Register("agy", &AgyRunner{})
 }
 
 // ClaudeRunner implements the Runner interface for the claude (Claude Code) driver.
@@ -497,6 +498,73 @@ func (r *GeminiRunner) Run(ctx context.Context, model string, prompt string) (st
 
 	// gemini -p "<prompt>" --approval-mode=plan -m <model>
 	args := []string{"-p", prompt, "--approval-mode=plan", "-m", model}
+	cmd := factory(ctx, executable, args...)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to get stdout pipe: %w", err)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to get stderr pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start subprocess %s: %w", executable, err)
+	}
+
+	// We must read standard error to avoid blocking and capture errors.
+	var stderrBuf strings.Builder
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stderrBuf, stderr)
+	}()
+
+	var stdoutBuf strings.Builder
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stdoutBuf, stdout)
+	}()
+
+	wg.Wait()
+
+	waitErr := cmd.Wait()
+
+	if waitErr != nil {
+		stderrStr := strings.TrimSpace(stderrBuf.String())
+		if stderrStr != "" {
+			return "", fmt.Errorf("subprocess exited with error: %v, stderr: %s", waitErr, stderrStr)
+		}
+		return "", fmt.Errorf("subprocess exited with error: %v", waitErr)
+	}
+
+	return stdoutBuf.String(), nil
+}
+
+// AgyRunner implements the Runner interface for the agy (Google Antigravity CLI) driver.
+type AgyRunner struct {
+	Executable     string
+	CommandFactory func(ctx context.Context, name string, args ...string) Command
+}
+
+// Run executes the under-the-hood agy CLI subprocess and captures its output.
+func (r *AgyRunner) Run(ctx context.Context, model string, prompt string) (string, error) {
+	executable := r.Executable
+	if executable == "" {
+		executable = "agy"
+	}
+
+	factory := r.CommandFactory
+	if factory == nil {
+		factory = NewRealCommand
+	}
+
+	// agy --print "<prompt>" --model <model>
+	args := []string{"--print", prompt, "--model", model}
 	cmd := factory(ctx, executable, args...)
 
 	stdout, err := cmd.StdoutPipe()
