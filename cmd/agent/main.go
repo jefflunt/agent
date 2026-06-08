@@ -10,6 +10,7 @@ import (
 	"github.com/jefflunt/agent/pkg/adapter"
 	"github.com/jefflunt/agent/pkg/config"
 	"github.com/jefflunt/agent/pkg/runner"
+	"github.com/jefflunt/agent/pkg/version"
 )
 
 // CLI encapsulates the execution context of the agent CLI.
@@ -44,6 +45,11 @@ func (c *CLI) Run() int {
 		} else {
 			positional = append(positional, arg)
 		}
+	}
+
+	if len(positional) == 1 && positional[0] == "version" {
+		fmt.Fprintf(c.Stdout, "agent version %s\n", version.Version)
+		return 0
 	}
 
 	if len(positional) == 0 {
@@ -133,6 +139,7 @@ func (c *CLI) Run() int {
 
 func (c *CLI) printUsage() {
 	fmt.Fprintln(c.Stderr, "\nUsage: agent [options] <adapter-name>")
+	fmt.Fprintln(c.Stderr, "       agent version")
 	fmt.Fprintln(c.Stderr, "Options:")
 	fmt.Fprintln(c.Stderr, "  --verbose, -v   Enable verbose logging to STDERR")
 }

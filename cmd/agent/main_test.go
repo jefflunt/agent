@@ -516,3 +516,26 @@ func TestCLI_Success_WithCustomFlags(t *testing.T) {
 		t.Errorf("expected second flag to be %q, got %q", "--permissions=read-only", capRunner.CapturedFlags[1])
 	}
 }
+
+func TestCLI_VersionSubcommand(t *testing.T) {
+	stdin := strings.NewReader("")
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	cli := &CLI{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
+		Args:   []string{"agent", "version"},
+	}
+
+	exitCode := cli.Run()
+	if exitCode != 0 {
+		t.Errorf("expected exit code 0 for 'version' subcommand, got %d. Stderr: %q", exitCode, stderr.String())
+	}
+
+	outStr := stdout.String()
+	if !strings.HasPrefix(outStr, "agent version ") {
+		t.Errorf("expected version output, got: %q", outStr)
+	}
+}

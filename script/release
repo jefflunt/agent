@@ -1,0 +1,29 @@
+#!/bin/bash
+set -e
+
+# Ensure we're in the root of the project
+cd "$(dirname "$0")/.."
+
+echo "==> Running script/build-test-install..."
+./script/build-test-install
+
+# Check for uncommitted changes
+if [ -n "$(git status --porcelain)" ]; then
+    echo "==> Committing uncommitted changes..."
+    git add .
+    git commit -m "chore: auto-commit before release"
+fi
+
+echo "==> Getting commit count..."
+# Get number of commits, removing whitespace
+NUM=$(git log --oneline | wc -l | tr -d '[:space:]')
+TAG="b$NUM"
+
+echo "==> Tagging as $TAG..."
+git tag "$TAG"
+
+echo "==> Pushing..."
+git push
+git push --tags
+
+echo "==> Release completed!"
