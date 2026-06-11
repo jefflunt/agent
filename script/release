@@ -1,4 +1,16 @@
 #!/bin/bash
+#
+# script/release
+#
+# Prepares and triggers a new release.
+# This script compiles, runs tests locally, commits changes, and pushes a build-number tag (b<count>).
+#
+# Connection:
+# Pushing the tag (e.g. b25) triggers the GitHub Action (.github/workflows/release.yml)
+# which cross-compiles binaries for all major platforms (Linux, macOS, Windows) and publishes
+# a release on GitHub under that tag.
+#
+
 set -e
 
 # Ensure we're in the root of the project
